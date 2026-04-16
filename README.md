@@ -7,6 +7,7 @@ Version actual: (vea VERSION).
 ## Caracteristicas actuales
 
 - Sincronizacion de calendario con Google Calendar en ventana configurable de `7` a `49` dias (`15` por defecto).
+- Los secretos de Google se almacenan en un binario cifrado (config.bin) y se desencriptan en tiempo de ejecución mediante una clave de entorno.
 - Seleccion explicita de calendario de Google para evitar leer eventos de calendarios no deseados.
 - Vistas de agenda `diaria`, `semanal` y `mensual`, con navegacion por periodos y acceso rapido a "Hoy".
 - Gestion de contactos: alta, edicion, eliminacion y vinculacion con citas.
@@ -19,12 +20,14 @@ Version actual: (vea VERSION).
 - Indicador visual de estado de sesion de Google y opcion de cierre de sesion/desvinculacion local.
 - Configuracion de tema (claro/oscuro), notificaciones de Windows e inicio automatico en Windows.
 - Atajos globales: `Ctrl+H` para abrir `Ayuda`, `Ctrl+,` para `Configuracion`.
+- Otras combinaciones de teclas: `Ctrl++` aumentar tamaño de la app, `Ctrl+-` disminuir tamaño de la app.
 
 ## Tecnologias
 
 - Python `3.10+` (`3.12` recomendado)
 - PyQt6
 - SQLite
+- cryptography
 - Google Calendar API
 - Gmail API
 
@@ -35,7 +38,7 @@ Version actual: (vea VERSION).
 3. Instala dependencias:
 
 ```bash
-pip install PyQt6 PyQt6-WebEngine google-auth google-auth-oauthlib google-api-python-client pytz
+pip install PyQt6 PyQt6-WebEngine google-auth google-auth-oauthlib google-api-python-client pytz cryptography
 ```
 
 ## Ejecucion
@@ -65,12 +68,9 @@ Adicionalmente, en `Datos locales` puede abrir `Encriptar base de datos` para:
 - Introducir la contrasena al arrancar PreCita cuando la base de datos esta cifrada.
 - Mantener una clave compatible para descifrado en otras herramientas autorizadas, ya que la clave elegida se usa directamente en el cifrado local del fichero.
 
-Variables de entorno opcionales:
+Seguridad de las claves de Google:
 
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-
-Si no se definen, la app utiliza credenciales embebidas y solicitara autenticacion OAuth al usar funciones de Google.
+- se usa la variable de entorno `PRECITA_MASTER_KEY` para desencriptar el fichero `config.bin`
 
 ## Flujo de uso recomendado
 
@@ -120,6 +120,7 @@ Desde `Ayuda` (tambien con `Ctrl+H`) puede abrir enlaces directos a funciones in
 - `VERSION`: version de aplicacion.
 - `precita.ico`: icono principal.
 - `LICENSE`: licencia GNU GPL v3.
+- `config.bin`: binario cifrado con las claves de la API de Google.
 
 ## Politica de privacidad
 
@@ -131,4 +132,4 @@ PreCita es una herramienta de ejecucion local y prioriza el control del usuario 
 4. **Control y eliminacion**: para borrar datos, cierre la app y elimine `~/.precita/`; opcionalmente revoque el acceso en su cuenta de Google.
 5. **Licencia**: software distribuido bajo GNU GPL v3, sin garantias (vea LICENSE). 
 
-Mas informacion: <https://eucarigo.com>
+Mas informacion: <https://eucarigo.com/precita>
