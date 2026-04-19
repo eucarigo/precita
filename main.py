@@ -12,6 +12,7 @@ from email.mime.image import MIMEImage
 from email import encoders
 from pathlib import Path
 from uuid import uuid4
+from cryptography.fernet import Fernet
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
@@ -49,11 +50,13 @@ SCOPES = SCOPES_CALENDAR + SCOPES_GMAIL
 OAUTH_LOOPBACK_PORT = 8080
 OAUTH_EXTERNAL_TIMEOUT_SECONDS = 15
 
-DB_PATH = Path.home() / '.precita' / 'precita.db'
-CREDENTIALS_PATH = Path.home() / '.precita' / 'token.json'
-CLIENT_SECRETS = Path.home() / '.precita' / 'client_secret.json'
-ATTACHMENTS_DIR = DB_PATH.parent / "template_attachments"
-DB_ENCRYPTION_CONFIG_PATH = DB_PATH.parent / "db_encryption_config.json"
+CLIENT_SECRETS = Path(__file__).parent / 'config.bin'
+
+PRECITA_LP = Path.home() / '.precita' # 
+DB_PATH = PRECITA_LP / 'precita.db'
+CREDENTIALS_PATH = PRECITA_LP / 'token.json'
+ATTACHMENTS_DIR = PRECITA_LP / "template_attachments"
+DB_ENCRYPTION_CONFIG_PATH = PRECITA_LP / 'db_encryption_config.json'
 MAX_TEMPLATE_PAYLOAD_BYTES = 16 * 1024 * 1024
 BLOCKED_ATTACHMENT_EXTENSIONS = {
     ".ade", ".adp", ".apk", ".appx", ".bat", ".cab", ".chm", ".cmd", ".com", ".cpl",
@@ -62,11 +65,7 @@ BLOCKED_ATTACHMENT_EXTENSIONS = {
 }
 ARCHIVE_EXTENSIONS = {".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"}
 
-# Usar variables de entorno o valores por defecto
-GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', None)
-GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', None)
-
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+PRECITA_LP.mkdir(parents=True, exist_ok=True)
 ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_ENCRYPTION_MAGIC = b"PRECITA_DB_ENC_v1"
@@ -85,41 +84,17 @@ _PLAUSIBLE_EMAIL_RE = re.compile(
     r"[A-Za-z]{2,63}$"
 )
 SPANISH_WEEKDAY_NAMES = (
-    "lunes",
-    "martes",
-    "miercoles",
-    "jueves",
-    "viernes",
-    "sabado",
-    "domingo",
+    "lunes", "martes", "miércoles",
+    "jueves", "viernes", "sábado", "domingo",
 )
 SPANISH_MONTH_NAMES = (
-    "enero",
-    "febrero",
-    "marzo",
-    "abril",
-    "mayo",
-    "junio",
-    "julio",
-    "agosto",
-    "septiembre",
-    "octubre",
-    "noviembre",
-    "diciembre",
+    "enero", "febrero", "marzo", "abril", "mayo", 
+    "junio", "julio", "agosto", "septiembre", 
+    "octubre", "noviembre", "diciembre",
 )
 SPANISH_MONTH_ABBR = (
-    "ene",
-    "feb",
-    "mar",
-    "abr",
-    "may",
-    "jun",
-    "jul",
-    "ago",
-    "sep",
-    "oct",
-    "nov",
-    "dic",
+    "ene", "feb", "mar", "abr", "may", "jun", 
+    "jul", "ago", "sep", "oct", "nov", "dic",
 )
 
 SINGLE_INSTANCE_SERVER_NAME = "precita_single_instance_server"
@@ -925,7 +900,7 @@ QGroupBox::title {
 
 def get_version():
     try:
-        with open("VERSION", "r") as f:
+        with open(Path(__file__).parent / "VERSION", "r") as f:
             return f.read().strip()
     except:
         return "0.0.0"
@@ -1900,6 +1875,30 @@ def _ensure_loopback_port_available(port: int) -> None:
         probe.close()
 
 
+def load_google_client_config():
+    """Carga y descifra la configuración de Google usando una clave de entorno."""
+    try:
+        # 'PRECITA_MASTER_KEY' es el nombre que usaremos al empaquetar
+        key_str = os.environ.get('PRECITA_MASTER_KEY')
+        if not key_str:
+            print("Error: No se encontró la clave de acceso al sistema.")
+            return None
+        if CLIENT_SECRETS.exists():
+            # Convertimos el string de la variable de entorno a bytes
+            f = Fernet(key_str.encode())            
+            with open(CLIENT_SECRETS, 'rb') as bin_file:
+                encrypted_content = bin_file.read()
+            decrypted_content = f.decrypt(encrypted_content)
+            return json.loads(decrypted_content.decode('utf-8'))
+        else:
+            print(f"Error: El archivo {CLIENT_SECRETS} no existe.")
+            return None
+
+    except Exception as e:
+        print(f"Error crítico en la carga de configuración.")
+        return None
+
+
 def get_google_service(scope_type='calendar', embedded_oauth=False, parent=None):
     """Obtiene el servicio de Google (Calendar o Gmail) con autenticación OAuth2."""
     creds = None
@@ -1925,18 +1924,8 @@ def get_google_service(scope_type='calendar', embedded_oauth=False, parent=None)
     
     # Si no hay credenciales válidas, hacer login OAuth
     if not creds or not creds.valid:
-        flow = InstalledAppFlow.from_client_config(
-            {
-                "installed": {
-                    "client_id": GOOGLE_CLIENT_ID,
-                    "client_secret": GOOGLE_CLIENT_SECRET,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [f"http://localhost:{OAUTH_LOOPBACK_PORT}/"]
-                }
-            },
-            scopes
-        )
+        client_config = load_google_client_config()
+        flow = InstalledAppFlow.from_client_config(client_config, scopes)
         flow.redirect_uri = f"http://localhost:{OAUTH_LOOPBACK_PORT}/"
 
         if embedded_oauth:
@@ -4354,7 +4343,7 @@ class HelpDialog(QDialog):
 
         blocked_exts = ", ".join(sorted(BLOCKED_ATTACHMENT_EXTENSIONS))
         archive_exts = ", ".join(sorted([x for x in ARCHIVE_EXTENSIONS if x != ".zip"]))
-        help_data_dir_url = QUrl.fromLocalFile(str(DB_PATH.parent)).toString()
+        help_data_dir_url = QUrl.fromLocalFile(str(PRECITA_LP)).toString()
 
         body = QTextBrowser()
         body.setReadOnly(True)
@@ -4771,7 +4760,7 @@ class StorageDialog(QDialog):
         return f"{size:.2f} {units[unit_idx]}"
 
     def _scan_precita_storage(self):
-        base_dir = DB_PATH.parent
+        base_dir = PRECITA_LP
         total_size = 0
         files_count = 0
         dirs_count = 0
@@ -5944,7 +5933,7 @@ class PreCitaMainWindow(QMainWindow):
         exit_action = tray_menu.addAction("Salir")
         exit_action.triggered.connect(self.quit_app)
         
-        icon_path = Path(__file__).parent / "precita.ico"
+        icon_path = Path(__file__).parent / 'precita.ico'
         if icon_path.exists():
             icon = QIcon(str(icon_path))
             self.tray_icon.setIcon(icon)
