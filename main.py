@@ -40,9 +40,18 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+def rpath(rel):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, rel)
+
 # ============================================================================
 # CONSTANTES, CONFIGURACIÓN, UTILIDADES
 # ============================================================================
+
+PRECITA_MASTER_KEY = None # añade aquí tu clave para descifrar el config.bin
 
 SCOPES_CALENDAR = ['https://www.googleapis.com/auth/calendar.readonly']
 SCOPES_GMAIL = ['https://www.googleapis.com/auth/gmail.send']
@@ -50,9 +59,9 @@ SCOPES = SCOPES_CALENDAR + SCOPES_GMAIL
 OAUTH_LOOPBACK_PORT = 8080
 OAUTH_EXTERNAL_TIMEOUT_SECONDS = 15
 
-CLIENT_SECRETS = Path(__file__).parent / 'config.bin'
+CLIENT_SECRETS = Path(__file__).parent / "config.bin"
 
-PRECITA_LP = Path.home() / '.precita' # 
+PRECITA_LP = Path.home() / '.precita'
 DB_PATH = PRECITA_LP / 'precita.db'
 CREDENTIALS_PATH = PRECITA_LP / 'token.json'
 ATTACHMENTS_DIR = PRECITA_LP / "template_attachments"
@@ -102,7 +111,6 @@ SINGLE_INSTANCE_SERVER_NAME = "precita_single_instance_server"
 if sys.platform == "win32":
     import winreg
 
-# Tema claro (paleta sobria)
 PRECITA_QSS_LIGHT = """
 QMainWindow { background-color: #e8edf3; }
 QWidget#centralRoot { background-color: #e8edf3; }
@@ -900,10 +908,10 @@ QGroupBox::title {
 
 def get_version():
     try:
-        with open(Path(__file__).parent / "VERSION", "r") as f:
+        with open(Path(__file__).parent / 'VERSION', "r") as f:
             return f.read().strip()
     except:
-        return "0.0.0"
+        return "0.36.8 (alpha)"
 
 # ============================================================================
 # INICIALIZACIÓN DE BASE DE DATOS
@@ -1878,16 +1886,10 @@ def _ensure_loopback_port_available(port: int) -> None:
 def load_google_client_config():
     """Carga y descifra la configuración de Google usando una clave de entorno."""
     try:
-        # 'PRECITA_MASTER_KEY' es el nombre que usaremos al empaquetar
-        key_str = os.environ.get('PRECITA_MASTER_KEY')
-        if not key_str:
-            print("Error: No se encontró la clave de acceso al sistema.")
-            return None
         if CLIENT_SECRETS.exists():
-            # Convertimos el string de la variable de entorno a bytes
-            f = Fernet(key_str.encode())            
-            with open(CLIENT_SECRETS, 'rb') as bin_file:
-                encrypted_content = bin_file.read()
+            f = Fernet(PRECITA_MASTER_KEY)            
+            with open(CLIENT_SECRETS, 'rb') as bf:
+                encrypted_content = bf.read()
             decrypted_content = f.decrypt(encrypted_content)
             return json.loads(decrypted_content.decode('utf-8'))
         else:
